@@ -106,14 +106,20 @@ class Blob(PhysicsEntity):
         self.shoot_cooldown = 0
         self.shoot_delay = 6
 
+        self.hit_timer = 0
+        self.float_particle_timer = 0
+
         self.set_action("idle")
 
     def update(self, player, tilemap, movement=(0, 0)):
+        if self.hit_timer > 0:
+            self.hit_timer -= 1
+
         dx = player.pos[0] - self.pos[0]
         dy = player.pos[1] - self.pos[1]
         distance = math.sqrt(dx**2 + dy**2)
 
-        if distance < self.aggro_distance:
+        if (distance < self.aggro_distance) or (self.hit_timer > 0):
             self.state = "chase"
         else:
             self.state = "idle"
@@ -167,7 +173,30 @@ class Blob(PhysicsEntity):
                 )
             vel = self.idle_movement
 
-        super().update(tilemap, movement=vel)
+        self.pos[0] += vel[0]
+        self.pos[1] += vel[1]
+
+        if vel[0] > 0:
+            self.flip = False
+        if vel[0] < 0:
+            self.flip = True
+
+        self.float_particle_timer -= 1
+        if self.float_particle_timer <= 0:
+            self.float_particle_timer = random.randint(10, 20)
+
+            angle = random.uniform(0, 2 * math.pi)
+            radius = self.size[0] / 2
+            p_x = self.rect().centerx + math.cos(angle) * radius
+            p_y = self.rect().centery + math.sin(angle) * radius
+
+            particle_pos = [p_x, p_y]
+            particle_size = random.uniform(2, 4)
+            self.game.float_particles.append(
+                {"pos": particle_pos, "size": particle_size, "color": (120, 40, 150)}
+            )
+
+        self.animation.update()
 
 
 class Enemy(PhysicsEntity):
@@ -175,89 +204,79 @@ class Enemy(PhysicsEntity):
         super().__init__(game, "enemy", pos, size)
         self.health = 5
         self.walking = 0
+        self.hit_timer = 0
 
     def update(self, tilemap, movement=(0, 0)):
-        if self.walking:
+        movement = list(movement)
+
+        if self.hit_timer > 0:
+            self.hit_timer -= 1
+
+            dis_x = self.game.player.pos[0] - self.pos[0]
+
             if tilemap.solid_check(
-                (self.rect().centerx + (-7 if self.flip else 7), self.pos[1] + 23)
+                (self.rect().centerx + (-7 if dis_x < 0 else 7), self.pos[1] + 23)
             ):
-                if self.collisions["right"] or self.collisions["left"]:
-                    self.flip = not self.flip
+                if dis_x > 0:
+                    movement[0] += 0.6
                 else:
-                    movement = (movement[0] - 0.5 if self.flip else 0.5, movement[1])
+                    movement[0] -= 0.6
             else:
                 self.flip = not self.flip
-            self.walking = max(0, self.walking - 1)
-            if not self.walking:
-                dis = (
-                    self.game.player.pos[0] - self.pos[0],
-                    self.game.player.pos[1] - self.pos[1],
-                )
-                if abs(dis[1]) < 16:
-                    if (self.flip and dis[0] < 0) or (not self.flip and dis[0] > 0):
-                        self.game.sfx["shoot"].play()
-                        angle = math.atan2(dis[1], dis[0])
-                        speed = 1.5
-                        vel_x = math.cos(angle) * speed
-                        vel_y = math.sin(angle) * speed
 
-                        spawn_pos = [
-                            self.rect().centerx + (-7 if self.flip else 7),
-                            self.rect().centery,
-                        ]
-                        self.game.projectiles.append(
-                            {"pos": spawn_pos, "vel": [vel_x, vel_y], "owner": "enemy"}
-                        )
+            self.walking = 0
+        else:
+            if self.walking:
+                if tilemap.solid_check(
+                    (self.rect().centerx + (-7 if self.flip else 7), self.pos[1] + 23)
+                ):
+                    if self.collisions["right"] or self.collisions["left"]:
+                        self.flip = not self.flip
+                    else:
+                        movement[0] += -0.5 if self.flip else 0.5
+                else:
+                    self.flip = not self.flip
+                self.walking = max(0, self.walking - 1)
+                if not self.walking:
+                    dis = (
+                        self.game.player.pos[0] - self.pos[0],
+                        self.game.player.pos[1] - self.pos[1],
+                    )
+                    if abs(dis[1]) < 16:
+                        if (self.flip and dis[0] < 0) or (not self.flip and dis[0] > 0):
+                            self.game.sfx["shoot"].play()
+                            angle = math.atan2(dis[1], dis[0])
+                            speed = 1.5
+                            vel_x = math.cos(angle) * speed
+                            vel_y = math.sin(angle) * speed
 
-                        for i in range(4):
-                            spark_angle = angle + random.random() * 0.5 - 0.25
-                            self.game.sparks.append(
-                                Spark(
-                                    self.game.projectiles[-1]["pos"],
-                                    spark_angle,
-                                    2 + random.random(),
-                                )
+                            spawn_pos = list(self.rect().center)
+                            self.game.projectiles.append(
+                                {
+                                    "pos": spawn_pos,
+                                    "vel": [vel_x, vel_y],
+                                    "owner": "enemy",
+                                }
                             )
-        elif random.random() < 0.01:
-            self.walking = random.randint(30, 120)
 
-        super().update(tilemap, movement=movement)
+                            for i in range(4):
+                                spark_angle = angle + random.random() * 0.5 - 0.25
+                                self.game.sparks.append(
+                                    Spark(
+                                        self.game.projectiles[-1]["pos"],
+                                        spark_angle,
+                                        2 + random.random(),
+                                    )
+                                )
+            elif random.random() < 0.01:
+                self.walking = random.randint(30, 120)
+
+        super().update(tilemap, movement=tuple(movement))
 
         if movement[0] != 0:
             self.set_action("walk")
         else:
             self.set_action("idle")
-
-        if abs(self.game.player.dashing) >= 50:
-            if self.rect().colliderect(self.game.player.rect()):
-                self.game.screenshake = max(16, self.game.screenshake)
-                self.game.sfx["hit"].play()
-                self.health = 0
-                for i in range(30):
-                    angle = random.random() * math.pi * 2
-                    speed = random.random() * 5
-                    self.game.sparks.append(
-                        Spark(self.rect().center, angle, 2 + random.random())
-                    )
-                    self.game.particles.append(
-                        Particle(
-                            self.game,
-                            "particle",
-                            self.rect().center,
-                            velocity=[
-                                math.cos(angle + math.pi) * speed * 0.5,
-                                math.sin(angle + math.pi) * speed * 0.5,
-                            ],
-                            frame=random.randint(0, 7),
-                        )
-                    )
-                self.game.sparks.append(
-                    Spark(self.rect().center, 0, 5 + random.random())
-                )
-                self.game.sparks.append(
-                    Spark(self.rect().center, math.pi, 5 + random.random())
-                )
-                return True
 
     def render(self, surf, offset=(0, 0)):
         super().render(surf, offset=offset)
@@ -284,7 +303,7 @@ class Player(PhysicsEntity):
     def __init__(self, game, pos, size):
         super().__init__(game, "player", pos, size)
         self.air_time = 0
-        self.jumps = 1
+        self.jumps = 2
         self.wall_slide = False
         self.dashing = 0
         self.maxhealth = 250
@@ -292,6 +311,7 @@ class Player(PhysicsEntity):
         self.shoot_cooldown = 0
         self.max_ammo = 10
         self.ammo = 10
+        self.dash_duration = 60
 
     def update(self, tilemap, movement=(0, 0)):
         super().update(tilemap, movement=movement)
@@ -301,14 +321,9 @@ class Player(PhysicsEntity):
 
         self.air_time += 1
 
-        if self.air_time > 120:
-            if not self.game.dead:
-                self.game.screenshake = max(16, self.game.screenshake)
-            self.game.dead += 1
-
         if self.collisions["down"]:
             self.air_time = 0
-            self.jumps = 1
+            self.jumps = 2
 
         if not self.wall_slide:
             if self.air_time > 4:
@@ -318,7 +333,7 @@ class Player(PhysicsEntity):
             else:
                 self.set_action("idle")
 
-        if abs(self.dashing) in {60, 50}:
+        if abs(self.dashing) in {self.dash_duration, self.dash_duration - 10}:
             for i in range(20):
                 angle = random.random() * math.pi * 2
                 speed = random.random() * 0.5 + 0.5
@@ -336,9 +351,9 @@ class Player(PhysicsEntity):
             self.dashing = max(0, self.dashing - 1)
         if self.dashing < 0:
             self.dashing = min(0, self.dashing + 1)
-        if abs(self.dashing) > 50:
+        if abs(self.dashing) > self.dash_duration - 10:
             self.velocity[0] = abs(self.dashing) / self.dashing * 8
-            if abs(self.dashing) == 51:
+            if abs(self.dashing) == self.dash_duration - 9:
                 self.velocity[0] *= 0.1
             pvelocity = [abs(self.dashing) / self.dashing * random.random() * 3, 0]
             self.game.particles.append(
@@ -357,7 +372,7 @@ class Player(PhysicsEntity):
             self.velocity[0] = min(self.velocity[0] + 0.1, 0)
 
     def render(self, surf, offset=(0, 0)):
-        if abs(self.dashing) <= 50:
+        if abs(self.dashing) <= self.dash_duration - 10:
             super().render(surf, offset=offset)
 
     def jump(self):
@@ -385,9 +400,9 @@ class Player(PhysicsEntity):
         if not self.dashing:
             self.game.sfx["dash"].play()
             if self.flip:
-                self.dashing = -60
+                self.dashing = -self.dash_duration
             else:
-                self.dashing = 60
+                self.dashing = self.dash_duration
 
     def shoot(self, mouse_pos):
         if self.shoot_cooldown == 0 and self.ammo > 0:
@@ -414,9 +429,10 @@ class Player(PhysicsEntity):
                     "owner": "player",
                 }
             )
+            return True
+        return False
 
     def reload(self):
         if self.ammo < self.max_ammo and self.health > 20:
             self.health -= 20
             self.ammo = self.max_ammo
-            # self.game.sfx['reload'].play() # Optional: add a reload sound

@@ -75,6 +75,9 @@ class Game:
         self.tilemap = Tilemap(self, tile_size=16)
 
         self.level = 0
+        self.num_levels = len(
+            [f for f in os.listdir("data/maps") if f.endswith(".json")]
+        )
         self.load_level(self.level)
 
         self.screenshake = 0
@@ -94,22 +97,36 @@ class Game:
             [("spawners", 0), ("spawners", 1), ("spawners", 2)]
         ):
             if spawner["variant"] == 0:
-                self.player.pos = spawner["pos"]
+                self.player_spawn_pos = spawner["pos"]
+                self.player.pos = list(self.player_spawn_pos)
                 self.player.air_time = 0
+                self.player.health = self.player.maxhealth
+                self.player.ammo = self.player.max_ammo
+                self.player.dash_duration = 60
             elif spawner["variant"] == 2:
-                self.blobs.append(Blob(self, spawner["pos"], (8, 8)))
+                self.blobs.append(Blob(self, spawner["pos"], (65, 65)))
             else:
                 self.enemies.append(Enemy(self, spawner["pos"], (8, 15)))
 
         self.projectiles = []
         self.particles = []
         self.sparks = []
+        self.float_particles = []
 
         self.scroll = [0, 0]
         self.dead = 0
-        self.transition = -30
+        self.death_type = None
 
         self.camera_offset = [0, 0]
+
+    def respawn(self):
+        self.player.health = max(0, self.player.health - 20)
+        self.player.dash_duration = max(20, self.player.dash_duration - 10)
+        self.player.pos = list(self.player_spawn_pos)
+        self.player.air_time = 0
+        self.player.velocity = [0, 0]
+        self.dead = 0
+        self.death_type = None
 
     def run(self):
         pygame.mixer.music.load("data/music.wav")
@@ -124,12 +141,19 @@ class Game:
 
             self.screenshake = max(0, self.screenshake - 1)
 
+            if not len(self.enemies) and not self.dead:
+                self.level = min(self.level + 1, self.num_levels - 1)
+                self.load_level(self.level)
+                self.player.health = min(self.player.maxhealth, self.player.health + 20)
+
             if self.dead:
                 self.dead += 1
-                if self.dead >= 10:
-                    self.transition = min(30, self.transition + 1)
                 if self.dead > 40:
-                    self.load_level(self.level)
+                    if self.death_type == "fall":
+                        self.respawn()
+                    elif self.death_type == "health":
+                        self.level = 0
+                        self.load_level(self.level)
 
             self.scroll[0] += (
                 self.player.rect().centerx
@@ -195,22 +219,51 @@ class Game:
                 )
                 self.player.render(self.display, offset=render_scroll)
 
+                if self.player.pos[1] > 500:
+                    self.dead = 1
+                    self.death_type = "fall"
+                    self.sfx["hit"].play()
+                    self.screenshake = max(16, self.screenshake)
+                elif self.player.health <= 0:
+                    self.dead = 1
+                    self.death_type = "health"
+                    self.sfx["hit"].play()
+                    self.screenshake = max(16, self.screenshake)
+
             for projectile in self.projectiles.copy():
                 projectile["pos"][0] += projectile["vel"][0]
                 projectile["pos"][1] += projectile["vel"][1]
                 projectile["timer"] = projectile.get("timer", 0) + 1
 
                 img = self.assets["projectile"]
+
+                render_pos_x = projectile["pos"][0] - render_scroll[0]
+                render_pos_y = projectile["pos"][1] - render_scroll[1]
+
+                if projectile["owner"] == "enemy":
+                    glow_size = img.get_width() + 8
+                    glow_surf = pygame.transform.scale(img, (glow_size, glow_size))
+                    glow_surf.fill((255, 60, 60), special_flags=pygame.BLEND_RGB_MULT)
+                    glow_surf.set_alpha(90)
+                    self.display.blit(
+                        glow_surf,
+                        (
+                            render_pos_x - glow_surf.get_width() / 2,
+                            render_pos_y - glow_surf.get_height() / 2,
+                        ),
+                    )
+
                 self.display.blit(
                     img,
                     (
-                        projectile["pos"][0] - img.get_width() / 2 - render_scroll[0],
-                        projectile["pos"][1] - img.get_height() / 2 - render_scroll[1],
+                        render_pos_x - img.get_width() / 2,
+                        render_pos_y - img.get_height() / 2,
                     ),
                 )
 
                 if self.tilemap.solid_check(projectile["pos"]):
-                    self.projectiles.remove(projectile)
+                    if projectile in self.projectiles:
+                        self.projectiles.remove(projectile)
                     for i in range(4):
                         self.sparks.append(
                             Spark(
@@ -220,46 +273,77 @@ class Game:
                             )
                         )
                 elif projectile["timer"] > 360:
-                    self.projectiles.remove(projectile)
+                    if projectile in self.projectiles:
+                        self.projectiles.remove(projectile)
 
                 if projectile["owner"] == "player":
                     hit = False
                     for enemy in self.enemies.copy():
                         if enemy.rect().collidepoint(projectile["pos"]):
                             enemy.health -= 1
-                            self.projectiles.remove(projectile)
+                            enemy.hit_timer = 60
+                            for i in range(4):
+                                self.sparks.append(
+                                    Spark(
+                                        projectile["pos"],
+                                        random.random() * math.pi * 2,
+                                        1 + random.random(),
+                                    )
+                                )
+                            if projectile in self.projectiles:
+                                self.projectiles.remove(projectile)
                             hit = True
                             break
                     if not hit:
                         for blob in self.blobs.copy():
                             if blob.rect().collidepoint(projectile["pos"]):
                                 blob.health -= 1
-                                self.projectiles.remove(projectile)
+                                blob.hit_timer = 90
+                                for i in range(4):
+                                    self.sparks.append(
+                                        Spark(
+                                            projectile["pos"],
+                                            random.random() * math.pi * 2,
+                                            1 + random.random(),
+                                        )
+                                    )
+                                if projectile in self.projectiles:
+                                    self.projectiles.remove(projectile)
                                 break
 
                 elif projectile["owner"] == "enemy":
-                    if abs(self.player.dashing) < 50:
+                    if (
+                        not self.dead
+                        and abs(self.player.dashing) < self.player.dash_duration - 10
+                    ):
                         if self.player.rect().collidepoint(projectile["pos"]):
-                            self.projectiles.remove(projectile)
-                            self.dead += 1
+                            if projectile in self.projectiles:
+                                self.projectiles.remove(projectile)
+                            self.player.health = max(0, self.player.health - 20)
                             self.sfx["hit"].play()
                             self.screenshake = max(16, self.screenshake)
-                            for i in range(30):
-                                angle = random.random() * math.pi * 2
-                                speed = random.random() * 5
-                                self.sparks.append(
-                                    Spark(
-                                        self.player.rect().center,
-                                        angle,
-                                        2 + random.random(),
-                                    )
-                                )
 
             for spark in self.sparks.copy():
                 kill = spark.update()
                 spark.render(self.display, offset=render_scroll)
                 if kill:
                     self.sparks.remove(spark)
+
+            for particle in self.float_particles.copy():
+                particle["size"] -= 0.1
+                particle["pos"][1] -= 0.2
+                if particle["size"] <= 0:
+                    self.float_particles.remove(particle)
+                else:
+                    pygame.draw.circle(
+                        self.display,
+                        particle["color"],
+                        [
+                            int(particle["pos"][0] - render_scroll[0]),
+                            int(particle["pos"][1] - render_scroll[1]),
+                        ],
+                        int(particle["size"]),
+                    )
 
             display_mask = pygame.mask.from_surface(self.display)
             display_sillhouette = display_mask.to_surface(
@@ -288,8 +372,8 @@ class Game:
                             event.pos[1]
                             * (self.display.get_height() / self.screen.get_height()),
                         )
-                        self.player.shoot(scaled_mouse_pos)
-                        self.sfx["shoot"].play()
+                        if self.player.shoot(scaled_mouse_pos):
+                            self.sfx["shoot"].play()
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_a:
                         self.movement[0] = True
@@ -308,12 +392,11 @@ class Game:
                     if event.key == pygame.K_d:
                         self.movement[1] = False
 
-            # UI Rendering
             health_bar_bg = pygame.Rect(5, 5, 100, 10)
             health_ratio = self.player.health / self.player.maxhealth
             current_health_width = int(100 * health_ratio)
             current_health_bar = pygame.Rect(5, 5, current_health_width, 10)
-            pygame.draw.rect(self.display_2, (255, 0, 0), health_bar_bg)
+            pygame.draw.rect(self.display_2, (150, 0, 0), health_bar_bg)
             if current_health_width > 0:
                 pygame.draw.rect(self.display_2, (0, 255, 0), current_health_bar)
 
@@ -323,6 +406,26 @@ class Game:
                 (255, 255, 255),
             )
             self.display_2.blit(ammo_text, (5, 20))
+
+            health_text = self.font.render(
+                f"HP: {int(self.player.health)}/{self.player.maxhealth}",
+                True,
+                (255, 255, 255),
+            )
+            self.display_2.blit(health_text, (110, 6))
+
+            level_text = self.font.render(
+                f"Level: {self.level + 1} / {self.num_levels}", True, (255, 255, 255)
+            )
+            self.display_2.blit(level_text, (5, 35))
+
+            enemies_text = self.font.render(
+                f"Enemies Left: {len(self.enemies)}", True, (255, 255, 255)
+            )
+            enemies_text_rect = enemies_text.get_rect(
+                topright=(self.display_2.get_width() - 5, 5)
+            )
+            self.display_2.blit(enemies_text, enemies_text_rect)
 
             if self.player.ammo == 0:
                 reload_text = self.font.render(
