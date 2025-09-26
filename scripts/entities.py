@@ -232,7 +232,7 @@ class Enemy(PhysicsEntity):
             if self.rect().colliderect(self.game.player.rect()):
                 self.game.screenshake = max(16, self.game.screenshake)
                 self.game.sfx["hit"].play()
-                self.health = 0  # Instant kill on dash
+                self.health = 0
                 for i in range(30):
                     angle = random.random() * math.pi * 2
                     speed = random.random() * 5
@@ -290,6 +290,8 @@ class Player(PhysicsEntity):
         self.maxhealth = 250
         self.health = 250
         self.shoot_cooldown = 0
+        self.max_ammo = 10
+        self.ammo = 10
 
     def update(self, tilemap, movement=(0, 0)):
         super().update(tilemap, movement=movement)
@@ -388,10 +390,10 @@ class Player(PhysicsEntity):
                 self.dashing = 60
 
     def shoot(self, mouse_pos):
-        if self.shoot_cooldown == 0:
-            self.shoot_cooldown = 15  # Cooldown in frames
+        if self.shoot_cooldown == 0 and self.ammo > 0:
+            self.shoot_cooldown = 15
+            self.ammo -= 1
 
-            # Use camera offset to get world coordinates of mouse
             world_mouse_pos = (
                 mouse_pos[0] + self.game.camera_offset[0],
                 mouse_pos[1] + self.game.camera_offset[1],
@@ -412,3 +414,9 @@ class Player(PhysicsEntity):
                     "owner": "player",
                 }
             )
+
+    def reload(self):
+        if self.ammo < self.max_ammo and self.health > 20:
+            self.health -= 20
+            self.ammo = self.max_ammo
+            # self.game.sfx['reload'].play() # Optional: add a reload sound
