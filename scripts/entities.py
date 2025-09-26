@@ -93,98 +93,87 @@ class Blob(PhysicsEntity):
     def __init__(self, game, pos, size):
         super().__init__(game, "tblob", pos, size)
         self.health = 3
-        self.speed = 0.5  # Base movement speed
+        self.speed = 0.5
 
-        # State Management
         self.state = "idle"
-        self.aggro_distance = 150  # The radius (in pixels) to start chasing the player
+        self.aggro_distance = 150
 
-        # Idle State Properties (for wandering)
         self.idle_timer = 0
         self.idle_movement = [0, 0]
 
-        # Chase State Properties (for wavy movement)
-        self.chase_timer = 0  # This will be the input for our sine wave
+        self.chase_timer = 0
+
+        self.shoot_cooldown = 0
+        self.shoot_delay = 6
 
         self.set_action("idle")
 
     def update(self, player, tilemap, movement=(0, 0)):
-        # --- 1. Calculate distance to the player to decide the state ---
         dx = player.pos[0] - self.pos[0]
         dy = player.pos[1] - self.pos[1]
         distance = math.sqrt(dx**2 + dy**2)
 
-        # --- 2. State Transition Logic ---
         if distance < self.aggro_distance:
             self.state = "chase"
         else:
             self.state = "idle"
 
-        # --- 3. Execute Behavior Based on State ---
-        vel = (0, 0)  # Final velocity for this frame
+        vel = (0, 0)
 
         if self.state == "chase":
-            # --- CHASE BEHAVIOR (Wavy Movement) ---
+            if self.shoot_cooldown > 0:
+                self.shoot_cooldown -= 1
 
-            # a. Calculate the direct angle to the player
-            angle_to_player = math.atan2(dy, dx)
-
-            # b. Calculate the perpendicular angle for the wave motion
-            # Adding/subtracting pi/2 (90 degrees) gives a perpendicular vector
-            perp_angle = angle_to_player + math.pi / 2
-
-            # c. Use a sine wave to create an offset
-            # The 'chase_timer' increases over time, creating the wave effect.
-            # The 'amplitude' controls how wide the wave is.
-            wave_frequency = 0.1
-            wave_amplitude = 0.6
-            offset = math.sin(self.chase_timer * wave_frequency) * wave_amplitude
-
-            # d. Combine the direct movement with the wavy offset
-            # The enemy moves mainly towards the player but also shifts along the perpendicular axis
-            vel_x = (
-                math.cos(angle_to_player) * self.speed + math.cos(perp_angle) * offset
-            )
-            vel_y = (
-                math.sin(angle_to_player) * self.speed + math.sin(perp_angle) * offset
-            )
-
-            vel = (vel_x, vel_y)
-
-            # Increment the timer for the sine wave
-            self.chase_timer += 1
+            if self.shoot_cooldown > 0:
+                angle_to_player = math.atan2(dy, dx)
+                perp_angle = angle_to_player + math.pi / 2
+                wave_frequency = 0.1
+                wave_amplitude = 0.6
+                offset = math.sin(self.chase_timer * wave_frequency) * wave_amplitude
+                vel_x = (
+                    math.cos(angle_to_player) * self.speed
+                    + math.cos(perp_angle) * offset
+                )
+                vel_y = (
+                    math.sin(angle_to_player) * self.speed
+                    + math.sin(perp_angle) * offset
+                )
+                vel = (vel_x, vel_y)
+                self.chase_timer += 1
+            else:
+                self.shoot_cooldown = self.shoot_delay
+                vel = (0, 0)
+                angle_to_player = math.atan2(dy, dx)
+                projectile_speed = 2.5
+                vel_x = math.cos(angle_to_player) * projectile_speed
+                vel_y = math.sin(angle_to_player) * projectile_speed
+                self.game.projectiles.append(
+                    {
+                        "pos": list(self.rect().center),
+                        "vel": [vel_x, vel_y],
+                        "owner": "enemy",
+                    }
+                )
 
         elif self.state == "idle":
-            # --- IDLE BEHAVIOR (Wandering) ---
-
-            # a. Countdown the timer. If it's running, keep moving.
             self.idle_timer -= 1
-
-            # b. When the timer runs out, pick a new direction and reset the timer
             if self.idle_timer <= 0:
-                # Reset timer to a random duration (e.g., 1 to 2 seconds at 60 FPS)
                 self.idle_timer = random.randint(60, 120)
-
-                # Pick a new random angle to move in
                 random_angle = random.uniform(0, 2 * math.pi)
-
-                # Set a new movement vector (slower than chase speed)
                 idle_speed = self.speed * 0.5
                 self.idle_movement = (
                     math.cos(random_angle) * idle_speed,
                     math.sin(random_angle) * idle_speed,
                 )
-
             vel = self.idle_movement
 
-        # --- 4. Call the parent update method with the calculated velocity ---
         super().update(tilemap, movement=vel)
 
 
 class Enemy(PhysicsEntity):
     def __init__(self, game, pos, size):
         super().__init__(game, "enemy", pos, size)
-
+        self.health = 5
         self.walking = 0
 
     def update(self, tilemap, movement=(0, 0)):
@@ -205,29 +194,27 @@ class Enemy(PhysicsEntity):
                     self.game.player.pos[1] - self.pos[1],
                 )
                 if abs(dis[1]) < 16:
-                    if self.flip and dis[0] < 0:
+                    if (self.flip and dis[0] < 0) or (not self.flip and dis[0] > 0):
                         self.game.sfx["shoot"].play()
+                        angle = math.atan2(dis[1], dis[0])
+                        speed = 1.5
+                        vel_x = math.cos(angle) * speed
+                        vel_y = math.sin(angle) * speed
+
+                        spawn_pos = [
+                            self.rect().centerx + (-7 if self.flip else 7),
+                            self.rect().centery,
+                        ]
                         self.game.projectiles.append(
-                            [[self.rect().centerx - 7, self.rect().centery], -1.5, 0]
+                            {"pos": spawn_pos, "vel": [vel_x, vel_y], "owner": "enemy"}
                         )
+
                         for i in range(4):
+                            spark_angle = angle + random.random() * 0.5 - 0.25
                             self.game.sparks.append(
                                 Spark(
-                                    self.game.projectiles[-1][0],
-                                    random.random() - 0.5 + math.pi,
-                                    2 + random.random(),
-                                )
-                            )
-                    if not self.flip and dis[0] > 0:
-                        self.game.sfx["shoot"].play()
-                        self.game.projectiles.append(
-                            [[self.rect().centerx + 7, self.rect().centery], 1.5, 0]
-                        )
-                        for i in range(4):
-                            self.game.sparks.append(
-                                Spark(
-                                    self.game.projectiles[-1][0],
-                                    random.random() - 0.5,
+                                    self.game.projectiles[-1]["pos"],
+                                    spark_angle,
                                     2 + random.random(),
                                 )
                             )
@@ -245,6 +232,7 @@ class Enemy(PhysicsEntity):
             if self.rect().colliderect(self.game.player.rect()):
                 self.game.screenshake = max(16, self.game.screenshake)
                 self.game.sfx["hit"].play()
+                self.health = 0  # Instant kill on dash
                 for i in range(30):
                     angle = random.random() * math.pi * 2
                     speed = random.random() * 5
@@ -301,9 +289,13 @@ class Player(PhysicsEntity):
         self.dashing = 0
         self.maxhealth = 250
         self.health = 250
+        self.shoot_cooldown = 0
 
     def update(self, tilemap, movement=(0, 0)):
         super().update(tilemap, movement=movement)
+
+        if self.shoot_cooldown > 0:
+            self.shoot_cooldown -= 1
 
         self.air_time += 1
 
@@ -315,16 +307,6 @@ class Player(PhysicsEntity):
         if self.collisions["down"]:
             self.air_time = 0
             self.jumps = 1
-
-        # self.wall_slide = False
-        # if (self.collisions["right"] or self.collisions["left"]) and self.air_time > 4:
-        #     self.wall_slide = True
-        #     self.velocity[1] = min(self.velocity[1], 0.5)
-        #     if self.collisions["right"]:
-        #         self.flip = False
-        #     else:
-        #         self.flip = True
-        #     self.set_action("wall_slide")
 
         if not self.wall_slide:
             if self.air_time > 4:
@@ -404,3 +386,29 @@ class Player(PhysicsEntity):
                 self.dashing = -60
             else:
                 self.dashing = 60
+
+    def shoot(self, mouse_pos):
+        if self.shoot_cooldown == 0:
+            self.shoot_cooldown = 15  # Cooldown in frames
+
+            # Use camera offset to get world coordinates of mouse
+            world_mouse_pos = (
+                mouse_pos[0] + self.game.camera_offset[0],
+                mouse_pos[1] + self.game.camera_offset[1],
+            )
+
+            dx = world_mouse_pos[0] - self.rect().centerx
+            dy = world_mouse_pos[1] - self.rect().centery
+            angle = math.atan2(dy, dx)
+            speed = 4.0
+
+            vel_x = math.cos(angle) * speed
+            vel_y = math.sin(angle) * speed
+
+            self.game.projectiles.append(
+                {
+                    "pos": list(self.rect().center),
+                    "vel": [vel_x, vel_y],
+                    "owner": "player",
+                }
+            )

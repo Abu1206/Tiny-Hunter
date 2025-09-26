@@ -93,6 +93,8 @@ class Game:
             if spawner["variant"] == 0:
                 self.player.pos = spawner["pos"]
                 self.player.air_time = 0
+            elif spawner["variant"] == 2:
+                self.blobs.append(PhysicsEntity(self, spawner["pos"], (65, 65)))
             else:
                 self.enemies.append(Enemy(self, spawner["pos"], (8, 15)))
 
@@ -164,6 +166,12 @@ class Game:
             self.clouds.render(self.display_2, offset=render_scroll)
 
             self.tilemap.render(self.display, offset=render_scroll)
+
+            for blob in self.blobs.copy():
+                kill = blob.update(self.tilemap, (0, 0))
+                blob.render(self.display, offset=render_scroll)
+                if kill:
+                    self.blobs.remove(blob)
 
             for enemy in self.enemies.copy():
                 kill = enemy.update(self.tilemap, (0, 0))
