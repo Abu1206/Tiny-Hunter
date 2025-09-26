@@ -83,6 +83,10 @@ class Game:
 
         self.screenshake = 0
 
+        self.start_time = pygame.time.get_ticks()
+        self.game_completed = False
+        self.completion_time = 0
+
     def load_level(self, map_id):
         self.tilemap.load("data/maps/" + str(map_id) + ".json")
 
@@ -120,6 +124,10 @@ class Game:
 
         self.camera_offset = [0, 0]
 
+        if map_id == 0:
+            self.start_time = pygame.time.get_ticks()
+            self.game_completed = False
+
     def respawn(self):
         self.player.health = max(0, self.player.health - 20)
         self.player.dash_duration = max(20, self.player.dash_duration - 10)
@@ -143,9 +151,16 @@ class Game:
             self.screenshake = max(0, self.screenshake - 1)
 
             if not len(self.enemies) and not self.dead:
-                self.level = min(self.level + 1, self.num_levels - 1)
-                self.load_level(self.level)
-                self.player.health = min(self.player.maxhealth, self.player.health + 20)
+                if self.level == self.num_levels - 1:
+                    if not self.game_completed:
+                        self.game_completed = True
+                        self.completion_time = pygame.time.get_ticks() - self.start_time
+                else:
+                    self.level = min(self.level + 1, self.num_levels - 1)
+                    self.load_level(self.level)
+                    self.player.health = min(
+                        self.player.maxhealth, self.player.health + 20
+                    )
 
             if self.dead:
                 self.dead += 1
@@ -404,7 +419,6 @@ class Game:
                 screenshake_offset,
             )
 
-            # UI Rendering (drawn directly to the screen to be on top)
             health_bar_bg = pygame.Rect(10, 10, 200, 18)
             health_ratio = self.player.health / self.player.maxhealth
             current_health_width = int(200 * health_ratio)
@@ -440,6 +454,21 @@ class Game:
             )
             self.screen.blit(enemies_text, enemies_text_rect)
 
+            if not self.game_completed:
+                elapsed_time = pygame.time.get_ticks() - self.start_time
+            else:
+                elapsed_time = self.completion_time
+
+            seconds = int(elapsed_time / 1000) % 60
+            minutes = int(elapsed_time / 60000)
+            timer_text = self.ui_font.render(
+                f"Time: {minutes:02}:{seconds:02}", True, (255, 255, 255)
+            )
+            timer_rect = timer_text.get_rect(
+                centerx=self.screen.get_width() // 2, top=10
+            )
+            self.screen.blit(timer_text, timer_rect)
+
             if self.player.ammo == 0:
                 reload_text = self.ui_font.render(
                     "PRESS R TO RELOAD (-20 HP)", True, (255, 220, 220)
@@ -448,6 +477,13 @@ class Game:
                     center=(self.screen.get_width() // 2, self.screen.get_height() - 30)
                 )
                 self.screen.blit(reload_text, reload_text_rect)
+
+            if self.game_completed:
+                win_text = self.ui_font.render("YOU WIN!", True, (255, 255, 0))
+                win_rect = win_text.get_rect(
+                    center=(self.screen.get_width() // 2, self.screen.get_height() // 2)
+                )
+                self.screen.blit(win_text, win_rect)
 
             pygame.display.update()
             self.clock.tick(60)
