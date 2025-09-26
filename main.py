@@ -390,6 +390,8 @@ class Game:
                         )
                         if self.player.shoot(scaled_mouse_pos):
                             self.sfx["shoot"].play()
+                    if event.button == 3:
+                        self.player.reload()
                 if event.type == pygame.KEYDOWN:
                     if event.key == pygame.K_a:
                         self.movement[0] = True
@@ -398,7 +400,7 @@ class Game:
                     if event.key == pygame.K_w:
                         if self.player.jump():
                             self.sfx["jump"].play()
-                    if event.key == pygame.K_SPACE:
+                    if event.key == pygame.K_SPACE or event.key == pygame.K_s:
                         self.player.dash()
                     if event.key == pygame.K_r:
                         self.player.reload()
