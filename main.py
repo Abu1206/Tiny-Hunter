@@ -28,6 +28,7 @@ class Game:
         self.movement = [False, False]
 
         self.font = pygame.font.Font(None, 16)
+        self.ui_font = pygame.font.Font(None, 24)
 
         self.assets = {
             "decor": load_images("tiles/decor"),
@@ -392,53 +393,6 @@ class Game:
                     if event.key == pygame.K_d:
                         self.movement[1] = False
 
-            health_bar_bg = pygame.Rect(5, 5, 100, 10)
-            health_ratio = self.player.health / self.player.maxhealth
-            current_health_width = int(100 * health_ratio)
-            current_health_bar = pygame.Rect(5, 5, current_health_width, 10)
-            pygame.draw.rect(self.display_2, (150, 0, 0), health_bar_bg)
-            if current_health_width > 0:
-                pygame.draw.rect(self.display_2, (0, 255, 0), current_health_bar)
-
-            ammo_text = self.font.render(
-                f"AMMO: {self.player.ammo}/{self.player.max_ammo}",
-                True,
-                (255, 255, 255),
-            )
-            self.display_2.blit(ammo_text, (5, 20))
-
-            health_text = self.font.render(
-                f"HP: {int(self.player.health)}/{self.player.maxhealth}",
-                True,
-                (255, 255, 255),
-            )
-            self.display_2.blit(health_text, (110, 6))
-
-            level_text = self.font.render(
-                f"Level: {self.level + 1} / {self.num_levels}", True, (255, 255, 255)
-            )
-            self.display_2.blit(level_text, (5, 35))
-
-            enemies_text = self.font.render(
-                f"Enemies Left: {len(self.enemies)}", True, (255, 255, 255)
-            )
-            enemies_text_rect = enemies_text.get_rect(
-                topright=(self.display_2.get_width() - 5, 5)
-            )
-            self.display_2.blit(enemies_text, enemies_text_rect)
-
-            if self.player.ammo == 0:
-                reload_text = self.font.render(
-                    "PRESS R TO RELOAD (-20 HP)", True, (255, 220, 220)
-                )
-                self.display_2.blit(
-                    reload_text,
-                    (
-                        self.display_2.get_width() // 2 - reload_text.get_width() // 2,
-                        self.display_2.get_height() - 20,
-                    ),
-                )
-
             self.display_2.blit(self.display, (0, 0))
 
             screenshake_offset = (
@@ -449,6 +403,52 @@ class Game:
                 pygame.transform.scale(self.display_2, self.screen.get_size()),
                 screenshake_offset,
             )
+
+            # UI Rendering (drawn directly to the screen to be on top)
+            health_bar_bg = pygame.Rect(10, 10, 200, 18)
+            health_ratio = self.player.health / self.player.maxhealth
+            current_health_width = int(200 * health_ratio)
+            current_health_bar = pygame.Rect(10, 10, current_health_width, 18)
+            pygame.draw.rect(self.screen, (150, 0, 0), health_bar_bg)
+            if current_health_width > 0:
+                pygame.draw.rect(self.screen, (0, 255, 0), current_health_bar)
+
+            ammo_text = self.ui_font.render(
+                f"AMMO: {self.player.ammo}/{self.player.max_ammo}",
+                True,
+                (255, 255, 255),
+            )
+            self.screen.blit(ammo_text, (10, 35))
+
+            health_text = self.ui_font.render(
+                f"HP: {int(self.player.health)}/{self.player.maxhealth}",
+                True,
+                (255, 255, 255),
+            )
+            self.screen.blit(health_text, (220, 11))
+
+            level_text = self.ui_font.render(
+                f"Level: {self.level + 1} / {self.num_levels}", True, (255, 255, 255)
+            )
+            self.screen.blit(level_text, (10, 60))
+
+            enemies_text = self.ui_font.render(
+                f"Enemies Left: {len(self.enemies)}", True, (255, 255, 255)
+            )
+            enemies_text_rect = enemies_text.get_rect(
+                topright=(self.screen.get_width() - 10, 10)
+            )
+            self.screen.blit(enemies_text, enemies_text_rect)
+
+            if self.player.ammo == 0:
+                reload_text = self.ui_font.render(
+                    "PRESS R TO RELOAD (-20 HP)", True, (255, 220, 220)
+                )
+                reload_text_rect = reload_text.get_rect(
+                    center=(self.screen.get_width() // 2, self.screen.get_height() - 30)
+                )
+                self.screen.blit(reload_text, reload_text_rect)
+
             pygame.display.update()
             self.clock.tick(60)
 
