@@ -134,7 +134,7 @@ class Editor:
                             )
                     else:
                         if event.type == pygame.K_DOWN:
-                            self.tile_group = (self.tile_group - 1) % len(
+                            self.tile_group = (self.tile_group + 1) % len(
                                 self.tile_list
                             )
                             self.tile_variant = 0
@@ -156,7 +156,8 @@ class Editor:
                         )
 
                     if event.key == pygame.K_DOWN:
-                        self.tile_group = (self.tile_group - 1) % len(self.tile_list)
+                        self.tile_variant = 0
+                        self.tile_group = (self.tile_group + 1) % len(self.tile_list)
                     if event.key == pygame.K_a:
                         self.movement[0] = True
                     if event.key == pygame.K_d:

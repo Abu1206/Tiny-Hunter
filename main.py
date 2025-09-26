@@ -28,14 +28,16 @@ class Game:
 
         self.assets = {
             "decor": load_images("tiles/decor"),
+            "spawners": load_images("tiles/spawners"),
             "grass": load_images("tiles/grass"),
             "large_decor": load_images("tiles/large_decor"),
             "stone": load_images("tiles/stone"),
             "player": load_image("entities/player.png"),
             "background": load_image("background.png"),
             "clouds": load_images("clouds"),
+            "blob/idle": Animation(load_images("entities/blob/idle"), img_dur=6),
             "enemy/idle": Animation(load_images("entities/enemy/idle"), img_dur=6),
-            "enemy/run": Animation(load_images("entities/enemy/run"), img_dur=4),
+            "enemy/walk": Animation(load_images("entities/enemy/walk"), img_dur=4),
             "player/idle": Animation(load_images("entities/player/idle"), img_dur=6),
             "player/walk": Animation(load_images("entities/player/walk"), img_dur=4),
             "player/jump": Animation(load_images("entities/player/jump")),
@@ -84,7 +86,10 @@ class Game:
             )
 
         self.enemies = []
-        for spawner in self.tilemap.extract([("spawners", 0), ("spawners", 1)]):
+        self.blobs = []
+        for spawner in self.tilemap.extract(
+            [("spawners", 0), ("spawners", 1), ("spawners", 2)]
+        ):
             if spawner["variant"] == 0:
                 self.player.pos = spawner["pos"]
                 self.player.air_time = 0
