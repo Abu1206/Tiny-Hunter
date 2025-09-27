@@ -104,7 +104,7 @@ class Blob(PhysicsEntity):
         self.chase_timer = 0
 
         self.shoot_cooldown = 0
-        self.shoot_delay = 16
+        self.shoot_delay = 5
 
         self.hit_timer = 0
         self.float_particle_timer = 0
