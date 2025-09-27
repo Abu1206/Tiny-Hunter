@@ -29,6 +29,7 @@ class Game:
 
         self.font = pygame.font.Font(None, 16)
         self.ui_font = pygame.font.Font(None, 24)
+        self.large_font = pygame.font.Font(None, 48)
 
         self.assets = {
             "decor": load_images("tiles/decor"),
@@ -93,6 +94,8 @@ class Game:
         self.completion_time = 0
 
         self.show_start_screen = True
+        self.enemies_defeated = 0
+        self.blobs_defeated = 0
 
     def load_level(self, map_id):
         self.tilemap.load("data/maps/" + str(map_id) + ".json")
@@ -134,6 +137,8 @@ class Game:
         if map_id == 0:
             self.start_time = pygame.time.get_ticks()
             self.game_completed = False
+            self.enemies_defeated = 0
+            self.blobs_defeated = 0
 
     def respawn(self):
         self.player.health = max(0, self.player.health - 20)
@@ -150,32 +155,110 @@ class Game:
         text_surf = font.render(text, True, text_color)
         outline_surf = font.render(text, True, outline_color)
 
-        # Blit the outlines in 4 directions
-        for offset in [(-1, -1), (1, -1), (-1, 1), (1, 1)]:
+        for offset in [(-2, -2), (2, -2), (-2, 2), (2, 2)]:
             self.screen.blit(outline_surf, (pos[0] + offset[0], pos[1] + offset[1]))
 
-        # Blit the main text on top
         self.screen.blit(text_surf, pos)
 
     def run(self):
-        while self.show_start_screen:
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    pygame.quit()
-                    sys.exit()
-                if event.type == pygame.MOUSEBUTTONDOWN or event.type == pygame.KEYDOWN:
-                    self.show_start_screen = False
-
-            self.screen.blit(self.assets["howto"], (0, 0))
-            pygame.display.update()
-            self.clock.tick(60)
-
-        pygame.mixer.music.load("data/music.wav")
-        pygame.mixer.music.set_volume(0.5)
-        pygame.mixer.music.play(-1)
-        self.sfx["ambience"].play(-1)
-
         while True:
+            # Combined Start/Game Over Screen Logic
+            if self.show_start_screen or self.game_completed:
+                while self.show_start_screen or self.game_completed:
+                    for event in pygame.event.get():
+                        if event.type == pygame.QUIT:
+                            pygame.quit()
+                            sys.exit()
+                        if (
+                            event.type == pygame.MOUSEBUTTONDOWN
+                            or event.type == pygame.KEYDOWN
+                        ):
+                            if self.game_completed:
+                                self.level = 0
+                                self.load_level(self.level)
+                            self.show_start_screen = False
+
+                    if self.game_completed:
+                        self.screen.fill((0, 0, 0))
+                        seconds = int(self.completion_time / 1000) % 60
+                        minutes = int(self.completion_time / 60000)
+                        time_str = f"Time: {minutes:02}:{seconds:02}"
+
+                        win_surf = self.large_font.render(
+                            "YOU WIN!", True, (255, 255, 0)
+                        )
+                        win_rect = win_surf.get_rect(
+                            center=(self.screen.get_width() // 2, 100)
+                        )
+                        self.render_text_with_outline(
+                            "YOU WIN!", self.large_font, win_rect.topleft, (255, 255, 0)
+                        )
+
+                        time_surf = self.ui_font.render(time_str, True, (255, 255, 255))
+                        time_rect = time_surf.get_rect(
+                            center=(self.screen.get_width() // 2, 200)
+                        )
+                        self.render_text_with_outline(
+                            time_str, self.ui_font, time_rect.topleft, (255, 255, 255)
+                        )
+
+                        enemies_surf = self.ui_font.render(
+                            f"Enemies Defeated: {self.enemies_defeated}",
+                            True,
+                            (255, 255, 255),
+                        )
+                        enemies_rect = enemies_surf.get_rect(
+                            center=(self.screen.get_width() // 2, 240)
+                        )
+                        self.render_text_with_outline(
+                            f"Enemies Defeated: {self.enemies_defeated}",
+                            self.ui_font,
+                            enemies_rect.topleft,
+                            (255, 255, 255),
+                        )
+
+                        blobs_surf = self.ui_font.render(
+                            f"Blobs Defeated: {self.blobs_defeated}",
+                            True,
+                            (255, 255, 255),
+                        )
+                        blobs_rect = blobs_surf.get_rect(
+                            center=(self.screen.get_width() // 2, 270)
+                        )
+                        self.render_text_with_outline(
+                            f"Blobs Defeated: {self.blobs_defeated}",
+                            self.ui_font,
+                            blobs_rect.topleft,
+                            (255, 255, 255),
+                        )
+
+                        prompt_surf = self.ui_font.render(
+                            "Click or press any key to play again",
+                            True,
+                            (200, 200, 200),
+                        )
+                        prompt_rect = prompt_surf.get_rect(
+                            center=(self.screen.get_width() // 2, 400)
+                        )
+                        self.render_text_with_outline(
+                            "Click or press any key to play again",
+                            self.ui_font,
+                            prompt_rect.topleft,
+                            (200, 200, 200),
+                        )
+
+                    else:  # show_start_screen is True
+                        self.screen.blit(self.assets["howto"], (0, 0))
+
+                    pygame.display.update()
+                    self.clock.tick(60)
+
+                pygame.mixer.music.load("data/music.mp3")
+                pygame.mixer.music.set_volume(0.5)
+                pygame.mixer.music.play(-1)
+                self.sfx["ambience"].play(-1)
+
+            # Main Game Loop
             self.display.fill((0, 0, 0, 0))
             self.display_2.blit(self.assets["background"], (0, 0))
 
@@ -241,6 +324,7 @@ class Game:
                 blob.render(self.display, offset=render_scroll)
                 if blob.health <= 0:
                     self.blobs.remove(blob)
+                    self.blobs_defeated += 1
                     self.sfx["hit"].play()
                     for i in range(10):
                         angle = random.random() * math.pi * 2
@@ -253,6 +337,7 @@ class Game:
                 enemy.render(self.display, offset=render_scroll)
                 if enemy.health <= 0:
                     self.enemies.remove(enemy)
+                    self.enemies_defeated += 1
                     self.sfx["hit"].play()
                     for i in range(15):
                         angle = random.random() * math.pi * 2
@@ -516,16 +601,6 @@ class Game:
                 )
                 self.render_text_with_outline(
                     reload_str, self.ui_font, reload_rect.topleft, (255, 220, 220)
-                )
-
-            if self.game_completed:
-                win_str = "YOU WIN!"
-                win_surf = self.ui_font.render(win_str, True, (255, 255, 0))
-                win_rect = win_surf.get_rect(
-                    center=(self.screen.get_width() // 2, self.screen.get_height() // 2)
-                )
-                self.render_text_with_outline(
-                    win_str, self.ui_font, win_rect.topleft, (255, 255, 0)
                 )
 
             pygame.display.update()
