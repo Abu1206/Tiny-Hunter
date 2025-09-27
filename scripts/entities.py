@@ -115,9 +115,13 @@ class Blob(PhysicsEntity):
         if self.hit_timer > 0:
             self.hit_timer -= 1
 
-        dx = player.pos[0] - self.pos[0]
-        dy = player.pos[1] - self.pos[1]
-        distance = math.sqrt(dx**2 + dy**2)
+        target_pos = (player.rect().centerx, player.rect().centery - 50)
+        movement_dx = target_pos[0] - self.pos[0]
+        movement_dy = target_pos[1] - self.pos[1]
+
+        shoot_dx = player.rect().centerx - self.pos[0]
+        shoot_dy = player.rect().centery - self.pos[1]
+        distance = math.sqrt(shoot_dx**2 + shoot_dy**2)
 
         if (distance < self.aggro_distance) or (self.hit_timer > 0):
             self.state = "chase"
@@ -131,17 +135,17 @@ class Blob(PhysicsEntity):
                 self.shoot_cooldown -= 1
 
             if self.shoot_cooldown > 0:
-                angle_to_player = math.atan2(dy, dx)
-                perp_angle = angle_to_player + math.pi / 2
+                angle_to_target = math.atan2(movement_dy, movement_dx)
+                perp_angle = angle_to_target + math.pi / 2
                 wave_frequency = 0.1
                 wave_amplitude = 0.6
                 offset = math.sin(self.chase_timer * wave_frequency) * wave_amplitude
                 vel_x = (
-                    math.cos(angle_to_player) * self.speed
+                    math.cos(angle_to_target) * self.speed
                     + math.cos(perp_angle) * offset
                 )
                 vel_y = (
-                    math.sin(angle_to_player) * self.speed
+                    math.sin(angle_to_target) * self.speed
                     + math.sin(perp_angle) * offset
                 )
                 vel = (vel_x, vel_y)
@@ -149,16 +153,24 @@ class Blob(PhysicsEntity):
             else:
                 self.shoot_cooldown = self.shoot_delay
                 vel = (0, 0)
-                angle_to_player = math.atan2(dy, dx)
+                angle_to_player = math.atan2(shoot_dy, shoot_dx)
+
+                max_inaccuracy = math.pi / 12
+                inaccuracy_frequency = 0.2
+                inaccuracy = (
+                    math.sin(self.chase_timer * inaccuracy_frequency) * max_inaccuracy
+                )
+                final_angle = angle_to_player + inaccuracy
+
                 projectile_speed = 2.5
-                vel_x = math.cos(angle_to_player) * projectile_speed
-                vel_y = math.sin(angle_to_player) * projectile_speed
+                vel_x = math.cos(final_angle) * projectile_speed
+                vel_y = math.sin(final_angle) * projectile_speed
+                spawn_pos = [
+                    self.pos[0] + self.size[0] / 2,
+                    self.pos[1] + self.size[1] / 2,
+                ]
                 self.game.projectiles.append(
-                    {
-                        "pos": list(self.rect().center),
-                        "vel": [vel_x, vel_y],
-                        "owner": "enemy",
-                    }
+                    {"pos": spawn_pos, "vel": [vel_x, vel_y], "owner": "enemy"}
                 )
 
         elif self.state == "idle":
@@ -250,7 +262,10 @@ class Enemy(PhysicsEntity):
                             vel_x = math.cos(angle) * speed
                             vel_y = math.sin(angle) * speed
 
-                            spawn_pos = list(self.rect().center)
+                            spawn_pos = [
+                                self.pos[0] + self.size[0] / 2,
+                                self.pos[1] + self.size[1] / 2,
+                            ]
                             self.game.projectiles.append(
                                 {
                                     "pos": spawn_pos,
@@ -414,20 +429,17 @@ class Player(PhysicsEntity):
                 mouse_pos[1] + self.game.camera_offset[1],
             )
 
-            dx = world_mouse_pos[0] - self.rect().centerx
-            dy = world_mouse_pos[1] - self.rect().centery
+            dx = world_mouse_pos[0] - (self.pos[0] + self.size[0] / 2)
+            dy = world_mouse_pos[1] - (self.pos[1] + self.size[1] / 2)
             angle = math.atan2(dy, dx)
             speed = 4.0
 
             vel_x = math.cos(angle) * speed
             vel_y = math.sin(angle) * speed
 
+            spawn_pos = [self.pos[0] + self.size[0] / 2, self.pos[1] + self.size[1] / 2]
             self.game.projectiles.append(
-                {
-                    "pos": list(self.rect().center),
-                    "vel": [vel_x, vel_y],
-                    "owner": "player",
-                }
+                {"pos": spawn_pos, "vel": [vel_x, vel_y], "owner": "player"}
             )
             return True
         return False

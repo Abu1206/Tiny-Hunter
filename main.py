@@ -53,7 +53,12 @@ class Game:
             ),
             "gun": load_image("gun.png"),
             "projectile": load_image("projectile.png"),
+            "howto": load_image("how to.png"),
         }
+
+        self.assets["howto"] = pygame.transform.scale(
+            self.assets["howto"], self.screen.get_size()
+        )
 
         self.sfx = {
             "jump": pygame.mixer.Sound("data/sfx/jump.wav"),
@@ -86,6 +91,8 @@ class Game:
         self.start_time = pygame.time.get_ticks()
         self.game_completed = False
         self.completion_time = 0
+
+        self.show_start_screen = True
 
     def load_level(self, map_id):
         self.tilemap.load("data/maps/" + str(map_id) + ".json")
@@ -137,11 +144,35 @@ class Game:
         self.dead = 0
         self.death_type = None
 
+    def render_text_with_outline(
+        self, text, font, pos, text_color, outline_color=(0, 0, 0)
+    ):
+        text_surf = font.render(text, True, text_color)
+        outline_surf = font.render(text, True, outline_color)
+
+        # Blit the outlines in 4 directions
+        for offset in [(-1, -1), (1, -1), (-1, 1), (1, 1)]:
+            self.screen.blit(outline_surf, (pos[0] + offset[0], pos[1] + offset[1]))
+
+        # Blit the main text on top
+        self.screen.blit(text_surf, pos)
+
     def run(self):
+        while self.show_start_screen:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    pygame.quit()
+                    sys.exit()
+                if event.type == pygame.MOUSEBUTTONDOWN or event.type == pygame.KEYDOWN:
+                    self.show_start_screen = False
+
+            self.screen.blit(self.assets["howto"], (0, 0))
+            pygame.display.update()
+            self.clock.tick(60)
+
         pygame.mixer.music.load("data/music.wav")
         pygame.mixer.music.set_volume(0.5)
         pygame.mixer.music.play(-1)
-
         self.sfx["ambience"].play(-1)
 
         while True:
@@ -429,32 +460,37 @@ class Game:
             if current_health_width > 0:
                 pygame.draw.rect(self.screen, (0, 255, 0), current_health_bar)
 
-            ammo_text = self.ui_font.render(
+            self.render_text_with_outline(
                 f"AMMO: {self.player.ammo}/{self.player.max_ammo}",
-                True,
+                self.ui_font,
+                (10, 35),
                 (255, 255, 255),
             )
-            self.screen.blit(ammo_text, (10, 35))
-
-            health_text = self.ui_font.render(
+            self.render_text_with_outline(
                 f"HP: {int(self.player.health)}/{self.player.maxhealth}",
-                True,
+                self.ui_font,
+                (220, 11),
                 (255, 255, 255),
             )
-            self.screen.blit(health_text, (220, 11))
-
-            level_text = self.ui_font.render(
-                f"Level: {self.level + 1} / {self.num_levels}", True, (255, 255, 255)
+            self.render_text_with_outline(
+                f"Level: {self.level + 1} / {self.num_levels}",
+                self.ui_font,
+                (10, 60),
+                (255, 255, 255),
             )
-            self.screen.blit(level_text, (10, 60))
 
-            enemies_text = self.ui_font.render(
+            enemies_text_surf = self.ui_font.render(
                 f"Enemies Left: {len(self.enemies)}", True, (255, 255, 255)
             )
-            enemies_text_rect = enemies_text.get_rect(
+            enemies_text_rect = enemies_text_surf.get_rect(
                 topright=(self.screen.get_width() - 10, 10)
             )
-            self.screen.blit(enemies_text, enemies_text_rect)
+            self.render_text_with_outline(
+                f"Enemies Left: {len(self.enemies)}",
+                self.ui_font,
+                enemies_text_rect.topleft,
+                (255, 255, 255),
+            )
 
             if not self.game_completed:
                 elapsed_time = pygame.time.get_ticks() - self.start_time
@@ -463,29 +499,34 @@ class Game:
 
             seconds = int(elapsed_time / 1000) % 60
             minutes = int(elapsed_time / 60000)
-            timer_text = self.ui_font.render(
-                f"Time: {minutes:02}:{seconds:02}", True, (255, 255, 255)
+            timer_str = f"Time: {minutes:02}:{seconds:02}"
+            timer_surf = self.ui_font.render(timer_str, True, (255, 255, 255))
+            timer_rect = timer_surf.get_rect(
+                topright=(enemies_text_rect.right, enemies_text_rect.bottom + 5)
             )
-            timer_rect = timer_text.get_rect(
-                centerx=self.screen.get_width() // 2, top=10
+            self.render_text_with_outline(
+                timer_str, self.ui_font, timer_rect.topleft, (255, 255, 255)
             )
-            self.screen.blit(timer_text, timer_rect)
 
             if self.player.ammo == 0:
-                reload_text = self.ui_font.render(
-                    "PRESS R TO RELOAD (-20 HP)", True, (255, 220, 220)
-                )
-                reload_text_rect = reload_text.get_rect(
+                reload_str = "PRESS R TO RELOAD (-20 HP)"
+                reload_surf = self.ui_font.render(reload_str, True, (255, 220, 220))
+                reload_rect = reload_surf.get_rect(
                     center=(self.screen.get_width() // 2, self.screen.get_height() - 30)
                 )
-                self.screen.blit(reload_text, reload_text_rect)
+                self.render_text_with_outline(
+                    reload_str, self.ui_font, reload_rect.topleft, (255, 220, 220)
+                )
 
             if self.game_completed:
-                win_text = self.ui_font.render("YOU WIN!", True, (255, 255, 0))
-                win_rect = win_text.get_rect(
+                win_str = "YOU WIN!"
+                win_surf = self.ui_font.render(win_str, True, (255, 255, 0))
+                win_rect = win_surf.get_rect(
                     center=(self.screen.get_width() // 2, self.screen.get_height() // 2)
                 )
-                self.screen.blit(win_text, win_rect)
+                self.render_text_with_outline(
+                    win_str, self.ui_font, win_rect.topleft, (255, 255, 0)
+                )
 
             pygame.display.update()
             self.clock.tick(60)
