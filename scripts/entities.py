@@ -92,11 +92,11 @@ class PhysicsEntity:
 class Blob(PhysicsEntity):
     def __init__(self, game, pos, size):
         super().__init__(game, "tblob", pos, size)
-        self.health = 4
-        self.speed = 1
+        self.health = 5
+        self.speed = 0.6
 
         self.state = "idle"
-        self.aggro_distance = 250
+        self.aggro_distance = 150
 
         self.idle_timer = 0
         self.idle_movement = [0, 0]
