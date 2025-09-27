@@ -92,11 +92,11 @@ class PhysicsEntity:
 class Blob(PhysicsEntity):
     def __init__(self, game, pos, size):
         super().__init__(game, "tblob", pos, size)
-        self.health = 3
-        self.speed = 0.5
+        self.health = 4
+        self.speed = 1
 
         self.state = "idle"
-        self.aggro_distance = 150
+        self.aggro_distance = 250
 
         self.idle_timer = 0
         self.idle_movement = [0, 0]
@@ -104,7 +104,7 @@ class Blob(PhysicsEntity):
         self.chase_timer = 0
 
         self.shoot_cooldown = 0
-        self.shoot_delay = 6
+        self.shoot_delay = 16
 
         self.hit_timer = 0
         self.float_particle_timer = 0
@@ -132,7 +132,7 @@ class Blob(PhysicsEntity):
 
         if self.state == "chase":
             if self.shoot_cooldown > 0:
-                self.shoot_cooldown -= 1
+                self.shoot_cooldown -= 0.5
 
             if self.shoot_cooldown > 0:
                 angle_to_target = math.atan2(movement_dy, movement_dx)
@@ -214,7 +214,7 @@ class Blob(PhysicsEntity):
 class Enemy(PhysicsEntity):
     def __init__(self, game, pos, size):
         super().__init__(game, "enemy", pos, size)
-        self.health = 5
+        self.health = 2
         self.walking = 0
         self.hit_timer = 0
 
