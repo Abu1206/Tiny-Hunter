@@ -2,7 +2,7 @@ import os
 import sys
 import math
 import random
-
+import asyncio
 import pygame
 
 from scripts.utils import load_image, load_images, Animation
@@ -606,4 +606,5 @@ class Game:
             self.clock.tick(60)
 
 
-Game().run()
+if __name__ == "__main__":
+    asyncio.run(Game().run())
