@@ -2,7 +2,7 @@ import os
 import sys
 import math
 import random
-import asyncio  # Make sure this is imported
+import asyncio
 import pygame
 
 from scripts.utils import load_image, load_images, Animation
@@ -56,45 +56,18 @@ class Game:
             "howto": load_image("how to.png"),
         }
 
-        # NOTE: For web, it's better to load sounds after an interaction.
-        # But for simplicity, we'll keep it here. Convert all audio to .ogg or .mp3
-        self.sfx = {
-            "jump": pygame.mixer.Sound("data/sfx/jump.mp3"),
-            "dash": pygame.mixer.Sound("data/sfx/dash.mp3"),
-            "hit": pygame.mixer.Sound("data/sfx/hit.mp3"),
-            "shoot": pygame.mixer.Sound("data/sfx/shoot.mp3"),
-            "ambience": pygame.mixer.Sound("data/sfx/ambience.mp3"),
-        }
-
-        self.sfx["ambience"].set_volume(0.2)
-        self.sfx["shoot"].set_volume(0.4)
-        self.sfx["hit"].set_volume(0.8)
-        self.sfx["dash"].set_volume(0.3)
-        self.sfx["jump"].set_volume(0.7)
-
         self.clouds = Clouds(self.assets["clouds"], count=16)
-
         self.player = Player(self, (50, 50), (8, 15))
-
         self.tilemap = Tilemap(self, tile_size=16)
 
         self.level = 0
-        try:
-            self.num_levels = len(
-                [f for f in os.listdir("data/maps") if f.endswith(".json")]
-            )
-        except FileNotFoundError:
-            # Handle the case where the maps directory might not exist in the web build
-            self.num_levels = 7  # Manually set the number of levels if needed
-
+        self.num_levels = 7
         self.load_level(self.level)
 
         self.screenshake = 0
-
         self.start_time = pygame.time.get_ticks()
         self.game_completed = False
         self.completion_time = 0
-
         self.show_start_screen = True
         self.enemies_defeated = 0
         self.blobs_defeated = 0
@@ -133,7 +106,6 @@ class Game:
         self.scroll = [0, 0]
         self.dead = 0
         self.death_type = None
-
         self.camera_offset = [0, 0]
 
         if map_id == 0:
@@ -162,39 +134,25 @@ class Game:
 
         self.screen.blit(text_surf, pos)
 
-    # Renamed 'run' to 'main' and made it 'async'
     async def main(self):
-        # The main 'while' loop. 'running' will be set to False to exit.
         running = True
         while running:
-            # ================================================================= #
-            # 1. EVENT HANDLING (Consolidated into one loop for all game states)
-            # ================================================================= #
             for event in pygame.event.get():
                 if event.type == pygame.QUIT:
-                    running = False  # Instead of sys.exit()
+                    running = False
 
-                # Handle input for the START SCREEN or GAME COMPLETED screen
                 if self.show_start_screen or self.game_completed:
                     if (
                         event.type == pygame.MOUSEBUTTONDOWN
                         or event.type == pygame.KEYDOWN
                     ):
-                        # If we were on the win screen, reset the game
                         if self.game_completed:
                             self.game_completed = False
                             self.level = 0
                             self.load_level(self.level)
-
-                        # Hide the start screen and start the music
                         if self.show_start_screen:
                             self.show_start_screen = False
-                            pygame.mixer.music.load("data/music.mp3")
-                            pygame.mixer.music.set_volume(0.5)
-                            pygame.mixer.music.play(-1)
-                            self.sfx["ambience"].play(-1)
 
-                # Handle input for the MAIN GAME
                 else:
                     if event.type == pygame.MOUSEBUTTONDOWN:
                         if event.button == 1:
@@ -206,8 +164,7 @@ class Game:
                                     self.display.get_height() / self.screen.get_height()
                                 ),
                             )
-                            if self.player.shoot(scaled_mouse_pos):
-                                self.sfx["shoot"].play()
+                            self.player.shoot(scaled_mouse_pos)
                         if event.button == 3:
                             self.player.reload()
                     if event.type == pygame.KEYDOWN:
@@ -216,8 +173,7 @@ class Game:
                         if event.key == pygame.K_d:
                             self.movement[1] = True
                         if event.key == pygame.K_w:
-                            if self.player.jump():
-                                self.sfx["jump"].play()
+                            self.player.jump()
                         if event.key == pygame.K_SPACE or event.key == pygame.K_s:
                             self.player.dash()
                         if event.key == pygame.K_r:
@@ -228,17 +184,11 @@ class Game:
                         if event.key == pygame.K_d:
                             self.movement[1] = False
 
-            # ================================================================= #
-            # 2. GAME STATE LOGIC & RENDERING (Using if/elif/else)
-            # ================================================================= #
-
-            # State 1: Game Completed Screen
             if self.game_completed:
                 self.screen.fill((0, 0, 0))
                 seconds = int(self.completion_time / 1000) % 60
                 minutes = int(self.completion_time / 60000)
                 time_str = f"Time: {minutes:02}:{seconds:02}"
-
                 self.render_text_with_outline(
                     "YOU WIN!",
                     self.large_font,
@@ -270,9 +220,7 @@ class Game:
                     (200, 200, 200),
                 )
 
-            # State 2: Start Screen
             elif self.show_start_screen:
-                # Scaled the 'howto' image in the __init__ to avoid doing it every frame
                 try:
                     scaled_howto = pygame.transform.scale(
                         self.assets["howto"], self.screen.get_size()
@@ -293,11 +241,9 @@ class Game:
                         (200, 200, 200),
                     )
 
-            # State 3: Main Gameplay
             else:
                 self.display.fill((0, 0, 0, 0))
                 self.display_2.blit(self.assets["background"], (0, 0))
-
                 self.screenshake = max(0, self.screenshake - 1)
 
                 if not len(self.enemies) and not len(self.blobs) and not self.dead:
@@ -354,7 +300,6 @@ class Game:
 
                 self.clouds.update()
                 self.clouds.render(self.display_2, offset=render_scroll)
-
                 self.tilemap.render(self.display, offset=render_scroll)
 
                 for blob in self.blobs.copy():
@@ -363,7 +308,6 @@ class Game:
                     if blob.health <= 0:
                         self.blobs.remove(blob)
                         self.blobs_defeated += 1
-                        self.sfx["hit"].play()
                         for i in range(10):
                             angle = random.random() * math.pi * 2
                             self.sparks.append(
@@ -376,7 +320,6 @@ class Game:
                     if enemy.health <= 0:
                         self.enemies.remove(enemy)
                         self.enemies_defeated += 1
-                        self.sfx["hit"].play()
                         for i in range(15):
                             angle = random.random() * math.pi * 2
                             self.sparks.append(
@@ -388,28 +331,22 @@ class Game:
                         self.tilemap, (self.movement[1] - self.movement[0], 0)
                     )
                     self.player.render(self.display, offset=render_scroll)
-
                     if self.player.pos[1] > 500:
                         self.dead = 1
                         self.death_type = "fall"
-                        self.sfx["hit"].play()
                         self.screenshake = max(16, self.screenshake)
                     elif self.player.health <= 0:
                         self.dead = 1
                         self.death_type = "health"
-                        self.sfx["hit"].play()
                         self.screenshake = max(16, self.screenshake)
 
-                # ... (rest of your projectile, spark, particle, and rendering logic is mostly fine) ...
                 for projectile in self.projectiles.copy():
                     projectile["pos"][0] += projectile["vel"][0]
                     projectile["pos"][1] += projectile["vel"][1]
                     projectile["timer"] = projectile.get("timer", 0) + 1
-
                     img = self.assets["projectile"]
                     render_pos_x = projectile["pos"][0] - render_scroll[0]
                     render_pos_y = projectile["pos"][1] - render_scroll[1]
-
                     if projectile["owner"] == "enemy":
                         glow_size = img.get_width() + 8
                         glow_surf = pygame.transform.scale(img, (glow_size, glow_size))
@@ -424,7 +361,6 @@ class Game:
                                 render_pos_y - glow_surf.get_height() / 2,
                             ),
                         )
-
                     self.display.blit(
                         img,
                         (
@@ -432,7 +368,6 @@ class Game:
                             render_pos_y - img.get_height() / 2,
                         ),
                     )
-
                     if self.tilemap.solid_check(projectile["pos"]):
                         if projectile in self.projectiles:
                             self.projectiles.remove(projectile)
@@ -447,7 +382,6 @@ class Game:
                     elif projectile["timer"] > 360:
                         if projectile in self.projectiles:
                             self.projectiles.remove(projectile)
-
                     if projectile["owner"] == "player":
                         hit = False
                         for enemy in self.enemies.copy():
@@ -492,7 +426,6 @@ class Game:
                                 if projectile in self.projectiles:
                                     self.projectiles.remove(projectile)
                                 self.player.health = max(0, self.player.health - 20)
-                                self.sfx["hit"].play()
                                 self.screenshake = max(16, self.screenshake)
 
                 for spark in self.sparks.copy():
@@ -518,7 +451,6 @@ class Game:
                     if kill:
                         self.particles.remove(particle)
 
-                # Final rendering to the screen
                 self.display_2.blit(self.display, (0, 0))
                 screenshake_offset = (
                     random.random() * self.screenshake - self.screenshake / 2,
@@ -529,7 +461,6 @@ class Game:
                     screenshake_offset,
                 )
 
-                # UI Rendering
                 health_bar_bg = pygame.Rect(10, 10, 200, 18)
                 health_ratio = self.player.health / self.player.maxhealth
                 current_health_width = int(200 * health_ratio)
@@ -597,20 +528,13 @@ class Game:
                         reload_str, self.ui_font, reload_rect.topleft, (255, 220, 220)
                     )
 
-            # ================================================================= #
-            # 3. FINAL UPDATE AND ASYNCIO YIELD (Happens every frame)
-            # ================================================================= #
             pygame.display.update()
             self.clock.tick(60)
-
-            # This is the most important line for web compatibility!
             await asyncio.sleep(0)
 
-        # This will run when the 'running' loop ends
         pygame.quit()
 
 
-# This is the new entry point for your game
 if __name__ == "__main__":
     game_instance = Game()
     asyncio.run(game_instance.main())

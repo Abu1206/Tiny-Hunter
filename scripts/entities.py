@@ -256,7 +256,6 @@ class Enemy(PhysicsEntity):
                     )
                     if abs(dis[1]) < 16:
                         if (self.flip and dis[0] < 0) or (not self.flip and dis[0] > 0):
-                            self.game.sfx["shoot"].play()
                             angle = math.atan2(dis[1], dis[0])
                             speed = 1.5
                             vel_x = math.cos(angle) * speed
@@ -413,7 +412,6 @@ class Player(PhysicsEntity):
 
     def dash(self):
         if not self.dashing:
-            self.game.sfx["dash"].play()
             if self.flip:
                 self.dashing = -self.dash_duration
             else:
